@@ -578,7 +578,10 @@ snd_compr_set_params(struct snd_compr_stream *stream, unsigned long arg)
 		stream->metadata_set = false;
 		stream->next_track = false;
 
-		stream->runtime->state = SNDRV_PCM_STATE_SETUP;
+		if (stream->direction == SND_COMPRESS_PLAYBACK)
+			stream->runtime->state = SNDRV_PCM_STATE_SETUP;
+		else
+			stream->runtime->state = SNDRV_PCM_STATE_PREPARED;
 	} else {
 		return -EPERM;
 	}
@@ -695,17 +698,8 @@ static int snd_compr_start(struct snd_compr_stream *stream)
 {
 	int retval;
 
-	switch (stream->runtime->state) {
-	case SNDRV_PCM_STATE_SETUP:
-		if (stream->direction != SND_COMPRESS_CAPTURE)
-			return -EPERM;
-		break;
-	case SNDRV_PCM_STATE_PREPARED:
-		break;
-	default:
+	if (stream->runtime->state != SNDRV_PCM_STATE_PREPARED)
 		return -EPERM;
-	}
-
 	retval = stream->ops->trigger(stream, SNDRV_PCM_TRIGGER_START);
 	if (!retval)
 		stream->runtime->state = SNDRV_PCM_STATE_RUNNING;
@@ -716,15 +710,9 @@ static int snd_compr_stop(struct snd_compr_stream *stream)
 {
 	int retval;
 
-	switch (stream->runtime->state) {
-	case SNDRV_PCM_STATE_OPEN:
-	case SNDRV_PCM_STATE_SETUP:
-	case SNDRV_PCM_STATE_PREPARED:
+	if (stream->runtime->state == SNDRV_PCM_STATE_PREPARED ||
+			stream->runtime->state == SNDRV_PCM_STATE_SETUP)
 		return -EPERM;
-	default:
-		break;
-	}
-
 	retval = stream->ops->trigger(stream, SNDRV_PCM_TRIGGER_STOP);
 	if (!retval) {
 		stream->runtime->state = SNDRV_PCM_STATE_SETUP;
@@ -796,8 +784,12 @@ static int snd_compr_drain(struct snd_compr_stream *stream)
 	default:
 		break;
 	}
+	if (stream->runtime->state == SNDRV_PCM_STATE_PREPARED ||
+			stream->runtime->state == SNDRV_PCM_STATE_SETUP) {
+		retval = -EPERM;
+		goto ret;
+	}
 	mutex_unlock(&stream->device->lock);
-
 	retval = stream->ops->trigger(stream, SND_COMPR_TRIGGER_DRAIN);
 	mutex_lock(&stream->device->lock);
 	if (!retval) {
@@ -817,10 +809,6 @@ static int snd_compr_next_track(struct snd_compr_stream *stream)
 
 	/* only a running stream can transition to next track */
 	if (stream->runtime->state != SNDRV_PCM_STATE_RUNNING)
-		return -EPERM;
-
-	/* next track doesn't have any meaning for capture streams */
-	if (stream->direction == SND_COMPRESS_CAPTURE)
 		return -EPERM;
 
 	/* you can signal next track if this is intended to be a gapless stream
@@ -855,12 +843,17 @@ static int snd_compr_partial_drain(struct snd_compr_stream *stream)
 	default:
 		break;
 	}
-	mutex_unlock(&stream->device->lock);
 
 	/* partial drain doesn't have any meaning for capture streams */
 	if (stream->direction == SND_COMPRESS_CAPTURE)
 		return -EPERM;
 
+	if (stream->runtime->state == SNDRV_PCM_STATE_PREPARED ||
+			stream->runtime->state == SNDRV_PCM_STATE_SETUP) {
+		mutex_unlock(&stream->device->lock);
+		return -EPERM;
+	}
+	mutex_unlock(&stream->device->lock);
 	/* stream can be drained only when next track has been signalled */
 	if (stream->next_track == false)
 		return -EPERM;
