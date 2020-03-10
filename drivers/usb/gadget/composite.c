@@ -558,7 +558,7 @@ static u8 encode_bMaxPower(enum usb_device_speed speed,
 	else
 		/* with super-speed report 900mA */
 		val = SSUSB_GADGET_VBUS_DRAW;
-		return (u8)(val / SSUSB_GADGET_VBUS_DRAW_UNITS);
+	return (u8)(val / SSUSB_GADGET_VBUS_DRAW_UNITS);
 }
 
 static int config_buf(struct usb_configuration *config,
