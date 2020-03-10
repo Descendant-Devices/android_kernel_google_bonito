@@ -2681,11 +2681,11 @@ static int msm_anlg_cdc_codec_micbias_control(struct snd_soc_dapm_widget *w,
 			msm_anlg_cdc_mbhc_common_micb_ctrl(codec,
 					MBHC_COMMON_MICB_PRECHARGE,
 					true);
-			msm_anlg_cdc_set_micb_v(codec);
-			msleep(50);
-			msm_anlg_cdc_mbhc_common_micb_ctrl(codec,
-					MBHC_COMMON_MICB_PRECHARGE,
-					false);
+		msm_anlg_cdc_set_micb_v(codec);
+		msleep(50);
+		msm_anlg_cdc_mbhc_common_micb_ctrl(codec,
+				MBHC_COMMON_MICB_PRECHARGE,
+				false);
 		break;
 	default:
 		pr_err("%s: invalid DAPM event %d\n", __func__, event);
